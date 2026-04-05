@@ -291,6 +291,7 @@ cleanup() {
 ORIG_GOVERNOR=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "")
 
 PG_CONTAINER="httparena-postgres"
+PG_PORT=5432
 
 restore_settings() {
     docker stop -t 5 "$CONTAINER_NAME" 2>/dev/null || true
@@ -368,7 +369,7 @@ if echo ",$FRAMEWORK_TESTS," | grep -qF ",async-db,"; then
     if [ -z "$PROFILE_FILTER" ] || [ "$PROFILE_FILTER" = "async-db" ] || [ "$PROFILE_FILTER" = "mixed" ] || [ "$PROFILE_FILTER" = "api-4" ] || [ "$PROFILE_FILTER" = "api-16" ]; then
         echo "[postgres] Starting Postgres sidecar..."
         docker rm -f "$PG_CONTAINER" 2>/dev/null || true
-        docker run -d --name "$PG_CONTAINER" --network host \
+        docker run -d --name "$PG_CONTAINER" -p "$PG_PORT":5432 \
             -e POSTGRES_USER=bench \
             -e POSTGRES_PASSWORD=bench \
             -e POSTGRES_DB=benchmark \
@@ -420,7 +421,7 @@ for profile in "${profiles_to_run[@]}"; do
     docker stop -t 5 "$CONTAINER_NAME" 2>/dev/null || true
     docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
-    docker_args=(-d --name "$CONTAINER_NAME" --network host
+    docker_args=(-d --name "$CONTAINER_NAME" -p "$PORT:$PORT" -p "$H2PORT:$H2PORT"
         --security-opt seccomp=unconfined
         --ulimit memlock=-1:-1
         --ulimit nofile="$HARD_NOFILE:$HARD_NOFILE"
@@ -430,7 +431,7 @@ for profile in "${profiles_to_run[@]}"; do
         -v "$ROOT_DIR/data/static:/data/static:ro"
         -v "$CERTS_DIR:/certs:ro")
     if [ "$endpoint" = "async-db" ] || [ "$endpoint" = "mixed" ] || [ "$endpoint" = "api-4" ] || [ "$endpoint" = "api-16" ]; then
-        docker_args+=(-e "DATABASE_URL=postgres://bench:bench@localhost:5432/benchmark")
+        docker_args+=(-e "DATABASE_URL=postgres://bench:bench@host.docker.internal:$PG_PORT/benchmark")
         docker_args+=(-e "DATABASE_MAX_CONN=256")
     fi
     if [ "$endpoint" = "api-4" ]; then

@@ -17,6 +17,7 @@ DATA_DIR="$ROOT_DIR/data"
 
 PG_CONTAINER="httparena-validate-postgres"
 PG_NETWORK="httparena-validate-net"
+PG_PORT=5432
 
 cleanup() {
     # Kill watchdog if still running
@@ -57,7 +58,7 @@ fi
 # Mount volumes based on subscribed tests
 HARD_NOFILE=$(ulimit -Hn)
 if has_test "async-db" || has_test "mixed" || has_test "api-4" || has_test "api-16"; then
-    docker_args=(-d --name "$CONTAINER_NAME" --network host --security-opt seccomp=unconfined
+    docker_args=(-d --name "$CONTAINER_NAME" -p "$PORT:8080" --security-opt seccomp=unconfined
         --ulimit memlock=-1:-1 --ulimit nofile="$HARD_NOFILE:$HARD_NOFILE")
 else
     docker_args=(-d --name "$CONTAINER_NAME" -p "$PORT:8080"
@@ -102,7 +103,7 @@ fi
 if has_test "async-db" || has_test "mixed" || has_test "api-4" || has_test "api-16"; then
     echo "[postgres] Starting Postgres sidecar for validation..."
     docker rm -f "$PG_CONTAINER" 2>/dev/null || true
-    docker run -d --name "$PG_CONTAINER" --network host \
+    docker run -d --name "$PG_CONTAINER" -p "$PG_PORT":5432 \
         -e POSTGRES_USER=bench \
         -e POSTGRES_PASSWORD=bench \
         -e POSTGRES_DB=benchmark \
@@ -120,7 +121,7 @@ if has_test "async-db" || has_test "mixed" || has_test "api-4" || has_test "api-
         [ "$i" -eq 60 ] && { echo "FAIL: Postgres sidecar not ready"; exit 1; }
         sleep 1
     done
-    docker_args+=(-e "DATABASE_URL=postgres://bench:bench@localhost:5432/benchmark")
+    docker_args+=(-e "DATABASE_URL=postgres://bench:bench@host.docker.internal:$PG_PORT/benchmark")
     docker_args+=(-e "DATABASE_MAX_CONN=512")
 fi
 

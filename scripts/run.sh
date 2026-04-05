@@ -17,6 +17,8 @@ CONTAINER_NAME="httparena-run-${FRAMEWORK}"
 PORT="${PORT:-8080}"
 H2PORT="${H2PORT:-8443}"
 
+PG_PORT="${PG_PORT:-5432}"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR/.."
 META_FILE="$ROOT_DIR/frameworks/$FRAMEWORK/meta.json"
@@ -55,11 +57,11 @@ fi
 docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
 # Build docker run args — mount all data files unconditionally for local testing
-docker_args=(--name "$CONTAINER_NAME" --network host)
+docker_args=(--name "$CONTAINER_NAME" -p "$PORT:$PORT" -p "$H2PORT:$H2PORT")
 docker_args+=(-v "$DATA_DIR/dataset.json:/data/dataset.json:ro")
 docker_args+=(-v "$DATA_DIR/dataset-large.json:/data/dataset-large.json:ro")
 docker_args+=(-v "$DATA_DIR/static:/data/static:ro")
-docker_args+=(-e "DATABASE_URL=postgres://bench:bench@localhost:5432/benchmark")
+docker_args+=(-e "DATABASE_URL=postgres://bench:bench@host.docker.internal:$PG_PORT/benchmark")
 docker_args+=(-e "DATABASE_MAX_CONN=512")
 
 if [ -d "$CERTS_DIR" ]; then
@@ -78,7 +80,7 @@ PG_CONTAINER="httparena-pg"
 
 echo "[postgres] Starting Postgres sidecar for validation..."
 docker rm -f "$PG_CONTAINER" 2>/dev/null || true
-docker run -d --name "$PG_CONTAINER" --network host \
+docker run -d --name "$PG_CONTAINER" -p "$PG_PORT":5432 \
     -e POSTGRES_USER=bench \
     -e POSTGRES_PASSWORD=bench \
     -e POSTGRES_DB=benchmark \
